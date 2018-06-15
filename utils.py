@@ -41,7 +41,7 @@ class LrScheduler:
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
             if epoch%self.epoch_step==0:
-                print '# setting learning_rate to %.2E'%lr
+                print ('# setting learning_rate to %.2E'%lr)
 
 
 # load model weights trained using scripts from https://github.com/felixgwu/img_classification_pk_pytorch OR
@@ -55,7 +55,7 @@ def load_weights_to_flatresnet(source_model, target_model):
     target_state = target_model.state_dict()
 
     # remove the module. prefix if it exists (thanks nn.DataParallel)
-    if source_state.keys()[0].startswith('module.'):
+    if list(source_state.keys())[0].startswith('module.'):
         source_state = {k[7:]:v for k,v in source_state.items()}
 
 
@@ -77,7 +77,7 @@ def load_weights_to_flatresnet(source_model, target_model):
         if translated in target_state.keys():
             target_state[translated] = source_state[key]
         else:
-            print translated, 'block missing'
+            print (translated, 'block missing')
 
     target_model.load_state_dict(target_state)
     return target_model
@@ -89,15 +89,15 @@ def load_checkpoint(rnet, agent, load):
     checkpoint = torch.load(load)
     if 'resnet' in checkpoint:
         rnet.load_state_dict(checkpoint['resnet'])
-        print 'loaded resnet from', os.path.basename(load)
+        print ('loaded resnet from', os.path.basename(load))
     if 'agent' in checkpoint:
         agent.load_state_dict(checkpoint['agent'])
-        print 'loaded agent from', os.path.basename(load)
+        print ('loaded agent from', os.path.basename(load))
     # backward compatibility (some old checkpoints)
     if 'net' in checkpoint:
         checkpoint['net'] = {k:v for k,v in checkpoint['net'].items() if 'features.fc' not in k}
         agent.load_state_dict(checkpoint['net'])
-        print 'loaded agent from', os.path.basename(load)
+        print ('loaded agent from', os.path.basename(load))
 
 
 def get_transforms(rnet, dset):

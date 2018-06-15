@@ -91,7 +91,7 @@ def test():
     Unique Policies: %d
     '''%(accuracy, sparsity, variance, ops_mean, ops_std, len(policy_set))
 
-    print log_str
+    print (log_str)
 
 #--------------------------------------------------------------------------------------------------------#
 trainset, testset = utils.get_dataset(args.model, args.data_dir)
@@ -102,7 +102,7 @@ rnet, agent = utils.get_model(args.model)
 agent.logit.weight.data.fill_(0)
 agent.logit.bias.data.fill_(10)
 
-print "loading checkpoints"
+print ("loading checkpoints")
 
 if args.load is not None:
     utils.load_checkpoint(rnet, agent, args.load)
