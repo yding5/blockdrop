@@ -125,7 +125,7 @@ def train(epoch):
     accuracy, reward, sparsity, variance, policy_set = utils.performance_stats(policies, rewards, matches)
 
     log_str = 'E: %d | A: %.3f | R: %.2E | S: %.3f | V: %.3f | #: %d'%(epoch, accuracy, reward, sparsity, variance, len(policy_set))
-    print log_str
+    print (log_str)
 
     log_value('train_accuracy', accuracy, epoch)
     log_value('train_reward', reward, epoch)
@@ -165,7 +165,7 @@ def test(epoch):
     accuracy, reward, sparsity, variance, policy_set = utils.performance_stats(policies, rewards, matches)
 
     log_str = 'TS - A: %.3f | R: %.2E | S: %.3f | V: %.3f | #: %d'%(accuracy, reward, sparsity, variance, len(policy_set))
-    print log_str
+    print (log_str)
 
     log_value('test_accuracy', accuracy, epoch)
     log_value('test_reward', reward, epoch)
@@ -201,7 +201,7 @@ if args.load is not None:
     checkpoint = torch.load(args.load)
     agent.load_state_dict(checkpoint['agent'])
     start_epoch = checkpoint['epoch'] + 1
-    print 'loaded agent from', args.load
+    print ('loaded agent from', args.load)
 
 if args.parallel:
     agent = nn.DataParallel(agent)
@@ -222,7 +222,7 @@ for epoch in range(start_epoch, start_epoch+args.max_epochs+1):
     else:
         args.cl_step = num_blocks
 
-    print 'training the last %d blocks ...' % args.cl_step
+    print ('training the last %d blocks ...' % args.cl_step)
     train(epoch)
 
     if epoch % 10 == 0:
