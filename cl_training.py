@@ -22,6 +22,7 @@ parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--beta', type=float, default=1e-1, help='entropy multiplier')
 parser.add_argument('--wd', type=float, default=0.0, help='weight decay')
 parser.add_argument('--model', default='R110_C10', help='R<depth>_<dataset> see utils.py for a list of configurations')
+parser.add_argument('--posi', default='0', help='binary code indicates active nodes')
 parser.add_argument('--data_dir', default='data/', help='data directory')
 parser.add_argument('--load', default=None, help='checkpoint to load agent from')
 parser.add_argument('--cv_dir', default='cv/tmp/', help='checkpoint directory (models and logs are saved here)')
@@ -189,6 +190,10 @@ trainset, testset = utils.get_dataset(args.model, args.data_dir)
 trainloader = torchdata.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 testloader = torchdata.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 rnet, agent = utils.get_model(args.model)
+
+posi_list = [int(item) for item in args.posi]
+print(posi_list)
+
 num_blocks = sum(rnet.layer_config)
 
 start_epoch = 0
