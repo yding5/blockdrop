@@ -68,19 +68,24 @@ def train(epoch):
             inputs = inputs.cuda()
 
         probs, value = agent(inputs)
-
+        print(probs.size())
         #---------------------------------------------------------------------#
 
         policy_map = probs.data.clone()
         policy_map[policy_map<0.5] = 0.0
         policy_map[policy_map>=0.5] = 1.0
-        policy_map = Variable(policy_map)
+
+        print(posi_list)
+
 
         probs = probs*args.alpha + (1-probs)*(1-args.alpha)
         distr = Bernoulli(probs)
         policy = distr.sample()
-
-        if args.cl_step < num_blocks:
+        #	
+        #full_policy = [[0 for i in range(num_blocks)] for j in range(policy.size()[0])]
+        #full_policy = torch.zeros(policy.size(0),num_blocks).cuda()
+        
+        if args.cl_step < num_gates:
             policy[:, :-args.cl_step] = 1
             policy_map[:, :-args.cl_step] = 1
 
@@ -89,12 +94,23 @@ def train(epoch):
         else:
             policy_mask = None
 
-        v_inputs = Variable(inputs.data, volatile=True)
-        preds_map = rnet.forward(v_inputs, policy_map)
-        preds_sample = rnet.forward(v_inputs, policy)
+        policy_slices = torch.split(policy, 1, dim = 1)
+        policy_map_slices = torch.split(policy, 1, dim = 1)
+        full_policy_slices = []
+        full_policy_map_slices = []
+        for i in range(num_gates):
+            full_policy_slices.append( policy_slices[i].repeat(1,repeat_list[i]))
+            full_policy_map_slices.append( policy_map_slices[i].repeat(1,repeat_list[i]))
+        full_policy = torch.cat(full_policy_slices, dim=1)
+        full_policy_map = torch.cat(full_policy_map_slices, dim=1)
+        #
 
-        reward_map, _ = get_reward(preds_map, targets, policy_map.data)
-        reward_sample, match = get_reward(preds_sample, targets, policy.data)
+        v_inputs = Variable(inputs.data, volatile=True)
+        preds_map = rnet.forward(v_inputs, full_policy_map)
+        preds_sample = rnet.forward(v_inputs, full_policy)
+
+        reward_map, _ = get_reward(preds_map, targets, full_policy_map.data)
+        reward_sample, match = get_reward(preds_sample, targets, full_policy.data)
 
         advantage = reward_sample - reward_map
 
@@ -120,7 +136,7 @@ def train(epoch):
 
         matches.append(match.cpu())
         rewards.append(reward_sample.cpu())
-        policies.append(policy.data.cpu())
+        policies.append(full_policy.data.cpu())
 
     accuracy, reward, sparsity, variance, policy_set = utils.performance_stats(policies, rewards, matches)
 
@@ -155,12 +171,18 @@ def test(epoch):
         if args.cl_step < num_blocks:
             policy[:, :-args.cl_step] = 1
 
-        preds = rnet.forward(inputs, policy)
-        reward, match = get_reward(preds, targets, policy.data)
+        policy_slices = torch.split(policy, 1, dim = 1)
+        full_policy_slices = []
+        for i in range(num_gates):
+            full_policy_slices.append( policy_slices[i].repeat(1,repeat_list[i]))
+        full_policy = torch.cat(full_policy_slices, dim=1)
+        
+        preds = rnet.forward(inputs, full_policy)
+        reward, match = get_reward(preds, targets, full_policy.data)
 
         matches.append(match)
         rewards.append(reward)
-        policies.append(policy.data)
+        policies.append(full_policy.data)
 
     accuracy, reward, sparsity, variance, policy_set = utils.performance_stats(policies, rewards, matches)
 
@@ -189,12 +211,25 @@ def test(epoch):
 trainset, testset = utils.get_dataset(args.model, args.data_dir)
 trainloader = torchdata.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 testloader = torchdata.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-rnet, agent = utils.get_model(args.model)
 
 posi_list = [int(item) for item in args.posi]
-print(posi_list)
-
+print(sum(posi_list))
+rnet, agent = utils.get_model(args.model, sum(posi_list))
 num_blocks = sum(rnet.layer_config)
+num_gates = sum(posi_list)
+repeat_list = []
+temp = 1
+for item in posi_list:
+    if item == 0:
+        temp = temp + 1
+    else:
+        repeat_list.append(temp)
+        temp = 1
+print(repeat_list)
+
+if len(posi_list) != num_blocks:
+	print('error length of posi, should be: '+ str(num_blocks))
+	raise ValueError
 
 start_epoch = 0
 if args.load is not None:
@@ -217,12 +252,12 @@ lr_scheduler = utils.LrScheduler(optimizer, args.lr, args.lr_decay_ratio, args.e
 for epoch in range(start_epoch, start_epoch+args.max_epochs+1):
     lr_scheduler.adjust_learning_rate(epoch)
 
-    if args.cl_step < num_blocks:
+    if args.cl_step < num_gates:
         args.cl_step = 1 + 1 * (epoch // 1)
     else:
-        args.cl_step = num_blocks
+        args.cl_step = num_gates
 
-    print ('training the last %d blocks ...' % args.cl_step)
+    print ('training the last %d gates ...' % args.cl_step)
     train(epoch)
 
     if epoch % 10 == 0:

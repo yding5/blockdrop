@@ -169,7 +169,7 @@ def get_dataset(model, root='data/'):
     return trainset, testset
 
 # Make a new if statement for every new model variety you want to index
-def get_model(model):
+def get_model(model, num_gates):
 
     from models import resnet, base
 
@@ -177,31 +177,36 @@ def get_model(model):
         rnet_checkpoint = 'cv/pretrained/R32_C10/pk_E_164_A_0.923.t7'
         layer_config = [5, 5, 5]
         rnet = resnet.FlatResNet32(base.BasicBlock, layer_config, num_classes=10)
-        agent = resnet.Policy32([1,1,1], num_blocks=15)
+        #agent = resnet.Policy32([1,1,1], num_blocks=15)
+        agent = resnet.Policy32([1,1,1], num_blocks=num_gates)
 
     elif model=='R110_C10':
         rnet_checkpoint = 'cv/pretrained/R110_C10/pk_E_130_A_0.932.t7'
         layer_config = [18, 18, 18]
         rnet = resnet.FlatResNet32(base.BasicBlock, layer_config, num_classes=10)
-        agent = resnet.Policy32([1,1,1], num_blocks=54)
+        #agent = resnet.Policy32([1,1,1], num_blocks=54)
+        agent = resnet.Policy32([1,1,1], num_blocks=num_gates)
 
     elif model=='R32_C100':
         rnet_checkpoint = 'cv/pretrained/R32_C100/pk_E_164_A_0.693.t7'
         layer_config = [5, 5, 5]
         rnet = resnet.FlatResNet32(base.BasicBlock, layer_config, num_classes=100)
-        agent = resnet.Policy32([1,1,1], num_blocks=15)
+        #agent = resnet.Policy32([1,1,1], num_blocks=15)
+        agent = resnet.Policy32([1,1,1], num_blocks=num_gates)
 
     elif model=='R110_C100':
         rnet_checkpoint = 'cv/pretrained/R110_C100/pk_E_160_A_0.723.t7'
         layer_config = [18, 18, 18]
         rnet = resnet.FlatResNet32(base.BasicBlock, layer_config, num_classes=100)
-        agent = resnet.Policy32([1,1,1], num_blocks=54)
+        #agent = resnet.Policy32([1,1,1], num_blocks=54)
+        agent = resnet.Policy32([1,1,1], num_blocks=num_gates)
 
     elif model=='R101_ImgNet':
         rnet_checkpoint = 'cv/pretrained/R101_ImgNet/ImageNet_R101_224_76.464'
         layer_config = [3,4,23,3]
         rnet = resnet.FlatResNet224(base.Bottleneck, layer_config, num_classes=1000)
-        agent = resnet.Policy224([1,1,1,1], num_blocks=33)
+        #agent = resnet.Policy224([1,1,1,1], num_blocks=33)
+        agent = resnet.Policy224([1,1,1,1], num_blocks=num_gates)
 
     # load pretrained weights into flat ResNet
     rnet_checkpoint = torch.load(rnet_checkpoint)
