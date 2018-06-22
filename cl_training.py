@@ -163,7 +163,7 @@ def test(epoch):
         policy[policy>=0.5] = 1.0
         policy = Variable(policy)
 
-        if args.cl_step < num_blocks:
+        if args.cl_step < num_gates:
             policy[:, :-args.cl_step] = 1
 
         policy_slices = torch.split(policy, 1, dim = 1)
