@@ -68,22 +68,17 @@ def train(epoch):
             inputs = inputs.cuda()
 
         probs, value = agent(inputs)
-        print(probs.size())
         #---------------------------------------------------------------------#
 
         policy_map = probs.data.clone()
         policy_map[policy_map<0.5] = 0.0
         policy_map[policy_map>=0.5] = 1.0
 
-        print(posi_list)
-
 
         probs = probs*args.alpha + (1-probs)*(1-args.alpha)
         distr = Bernoulli(probs)
         policy = distr.sample()
         #	
-        #full_policy = [[0 for i in range(num_blocks)] for j in range(policy.size()[0])]
-        #full_policy = torch.zeros(policy.size(0),num_blocks).cuda()
         
         if args.cl_step < num_gates:
             policy[:, :-args.cl_step] = 1
