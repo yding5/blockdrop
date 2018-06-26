@@ -69,16 +69,20 @@ def train(epoch):
 
         probs, value = agent(inputs)
         #---------------------------------------------------------------------#
-
+        #print(probs)
+        #print(value)
         policy_map = probs.data.clone()
         policy_map[policy_map<0.5] = 0.0
         policy_map[policy_map>=0.5] = 1.0
+        policy_map = Variable(policy_map)
 
 
         probs = probs*args.alpha + (1-probs)*(1-args.alpha)
         distr = Bernoulli(probs)
         policy = distr.sample()
         #	
+        #print('policy')
+        #print(policy[0,:].view(1,-1))
         
         if args.cl_step < num_gates:
             policy[:, :-args.cl_step] = 1
@@ -88,16 +92,32 @@ def train(epoch):
             policy_mask[:, :-args.cl_step] = 0
         else:
             policy_mask = None
-
+        #if policy_map[0,-1] == -1:
+            #print('policy after mask')
+            #print(policy[0,:].view(1,-1))
+            #print('policy map after mask')
+            #print(policy_map[0,:].view(1,-1))
         policy_slices = torch.split(policy, 1, dim = 1)
-        policy_map_slices = torch.split(policy, 1, dim = 1)
+        policy_map_slices = torch.split(policy_map, 1, dim = 1)
+        #if policy_map[0,-1] == -1:
+            #print('policy map slices')
+            #for tt in policy_map_slices:
+            #    print(tt[0])
         full_policy_slices = []
         full_policy_map_slices = []
         for i in range(num_gates):
             full_policy_slices.append( policy_slices[i].repeat(1,repeat_list[i]))
             full_policy_map_slices.append( policy_map_slices[i].repeat(1,repeat_list[i]))
+        #if policy_map[0,-1] == -1:
+            #print('full policy map slices')
+            #print(full_policy_map_slices[-1][0])
         full_policy = torch.cat(full_policy_slices, dim=1)
         full_policy_map = torch.cat(full_policy_map_slices, dim=1)
+        #print('full policy')
+        #print(full_policy[0,:].view(1,-1))
+        #if policy_map[0,-1] == -1:
+            #print('full policy map')
+            #print(full_policy_map[0,:].view(1,-1))
         #
 
         v_inputs = Variable(inputs.data, volatile=True)
