@@ -18,21 +18,22 @@ cudnn.benchmark = True
 
 import argparse
 parser = argparse.ArgumentParser(description='BlockDrop Training')
-parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
+parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
+parser.add_argument('--beta', type=float, default=1e-1, help='entropy multiplier')
 parser.add_argument('--wd', type=float, default=0.0, help='weight decay')
 parser.add_argument('--model', default='R110_C10', help='R<depth>_<dataset> see utils.py for a list of configurations')
 parser.add_argument('--posi', default='0', help='binary code indicates active nodes')
 parser.add_argument('--data_dir', default='data/', help='data directory')
-parser.add_argument('--load', default=None, help='checkpoint to load rnet+agent from')
-parser.add_argument('--pretrained', default=None, help='pretrained policy model checkpoint (from curriculum training)')
+parser.add_argument('--load', default=None, help='checkpoint to load agent from')
 parser.add_argument('--cv_dir', default='cv/tmp/', help='checkpoint directory (models and logs are saved here)')
 parser.add_argument('--batch_size', type=int, default=256, help='batch size')
-parser.add_argument('--epoch_step', type=int, default=1600, help='epochs after which lr is decayed')
-parser.add_argument('--max_epochs', type=int, default=2000, help='total epochs to run')
+parser.add_argument('--epoch_step', type=int, default=10000, help='epochs after which lr is decayed')
+parser.add_argument('--max_epochs', type=int, default=10000, help='total epochs to run')
 parser.add_argument('--lr_decay_ratio', type=float, default=0.1, help='lr *= lr_decay_ratio after epoch_steps')
 parser.add_argument('--parallel', action ='store_true', default=False, help='use multiple GPUs for training')
+parser.add_argument('--cl_step', type=int, default=100, help='steps for curriculum training')
 # parser.add_argument('--joint', action ='store_true', default=True, help='train both the policy network and the resnet')
-parser.add_argument('--penalty', type=float, default=-5, help='gamma: reward for incorrect predictions')
+parser.add_argument('--penalty', type=float, default=-1, help='gamma: reward for incorrect predictions')
 parser.add_argument('--alpha', type=float, default=0.8, help='probability bounding factor')
 args = parser.parse_args()
 
@@ -58,7 +59,6 @@ def get_reward(preds, targets, policy):
 def train(epoch):
 
     agent.train()
-    rnet.train()
 
     matches, rewards, policies = [], [], []
     for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(trainloader), total=len(trainloader)):
@@ -68,44 +68,82 @@ def train(epoch):
             inputs = inputs.cuda()
 
         probs, value = agent(inputs)
-
         #---------------------------------------------------------------------#
-
+        #print(probs)
+        #print(value)
         policy_map = probs.data.clone()
         policy_map[policy_map<0.5] = 0.0
         policy_map[policy_map>=0.5] = 1.0
         policy_map = Variable(policy_map)
 
+
         probs = probs*args.alpha + (1-probs)*(1-args.alpha)
         distr = Bernoulli(probs)
         policy = distr.sample()
-        ##
+        #	
+        #print('policy')
+        #print(policy[0,:].view(1,-1))
+        
+        if args.cl_step < num_gates:
+            policy[:, :-args.cl_step] = 1
+            policy_map[:, :-args.cl_step] = 1
+
+            policy_mask = Variable(torch.ones(inputs.size(0), policy.size(1))).cuda()
+            policy_mask[:, :-args.cl_step] = 0
+        else:
+            policy_mask = None
+        #if policy_map[0,-1] == -1:
+            #print('policy after mask')
+            #print(policy[0,:].view(1,-1))
+            #print('policy map after mask')
+            #print(policy_map[0,:].view(1,-1))
         policy_slices = torch.split(policy, 1, dim = 1)
         policy_map_slices = torch.split(policy_map, 1, dim = 1)
+        #if policy_map[0,-1] == -1:
+            #print('policy map slices')
+            #for tt in policy_map_slices:
+            #    print(tt[0])
         full_policy_slices = []
         full_policy_map_slices = []
         for i in range(num_gates):
             full_policy_slices.append( policy_slices[i].repeat(1,repeat_list[i]))
             full_policy_map_slices.append( policy_map_slices[i].repeat(1,repeat_list[i]))
+        #if policy_map[0,-1] == -1:
+            #print('full policy map slices')
+            #print(full_policy_map_slices[-1][0])
         full_policy = torch.cat(full_policy_slices, dim=1)
         full_policy_map = torch.cat(full_policy_map_slices, dim=1)
-
-
+        #print('full policy')
+        #print(full_policy[0,:].view(1,-1))
+        #if policy_map[0,-1] == -1:
+            #print('full policy map')
+            #print(full_policy_map[0,:].view(1,-1))
+        #
 
         v_inputs = Variable(inputs.data, volatile=True)
-        preds_map = rnet.forward(v_inputs,full_policy_map)
-        preds_sample = rnet.forward(inputs, full_policy)
+        preds_map = rnet.forward(v_inputs, full_policy_map)
+        preds_sample = rnet.forward(v_inputs, full_policy)
 
         reward_map, _ = get_reward(preds_map, targets, full_policy_map.data)
         reward_sample, match = get_reward(preds_sample, targets, full_policy.data)
 
         advantage = reward_sample - reward_map
-        # advantage = advantage.expand_as(policy)
-        loss = -distr.log_prob(policy).sum(1, keepdim=True) * Variable(advantage)
+
+        loss = -distr.log_prob(policy)
+        loss = loss * Variable(advantage).expand_as(policy)
+
+        if policy_mask is not None:
+            loss = policy_mask * loss # mask for curriculum learning
+
         loss = loss.sum()
 
+        probs = probs.clamp(1e-15, 1-1e-15)
+        entropy_loss = -probs*torch.log(probs)
+        entropy_loss = args.beta*entropy_loss.sum()
+
+        loss = (loss - entropy_loss)/inputs.size(0)
+
         #---------------------------------------------------------------------#
-        loss += F.cross_entropy(preds_sample, targets)
 
         optimizer.zero_grad()
         loss.backward()
@@ -130,7 +168,6 @@ def train(epoch):
 def test(epoch):
 
     agent.eval()
-    rnet.eval()
 
     matches, rewards, policies = [], [], []
     for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(testloader), total=len(testloader)):
@@ -146,7 +183,9 @@ def test(epoch):
         policy[policy>=0.5] = 1.0
         policy = Variable(policy)
 
-        ##
+        if args.cl_step < num_gates:
+            policy[:, :-args.cl_step] = 1
+
         policy_slices = torch.split(policy, 1, dim = 1)
         full_policy_slices = []
         for i in range(num_gates):
@@ -173,11 +212,9 @@ def test(epoch):
 
     # save the model
     agent_state_dict = agent.module.state_dict() if args.parallel else agent.state_dict()
-    rnet_state_dict = rnet.module.state_dict() if args.parallel else rnet.state_dict()
 
     state = {
       'agent': agent_state_dict,
-      'resnet': rnet_state_dict,
       'epoch': epoch,
       'reward': reward,
       'acc': accuracy
@@ -209,37 +246,36 @@ if len(posi_list) != num_blocks:
 	print('error length of posi, should be: '+ str(num_blocks))
 	raise ValueError
 
-
-
-if args.pretrained is not None:
-    checkpoint = torch.load(args.pretrained)
-    key = 'net' if 'net' in checkpoint else 'agent'
-    agent.load_state_dict(checkpoint[key])
-    print ('loaded pretrained model from', args.pretrained)
-
 start_epoch = 0
 if args.load is not None:
-    checkpoint = torch.load(args.load)
-    rnet.load_state_dict(checkpoint['resnet'])
-    agent.load_state_dict(checkpoint['agent'])
-    start_epoch = checkpoint['epoch'] + 1
+    #checkpoint = torch.load(args.load)
+    #agent.load_state_dict(checkpoint['agent'])
+    utils.load_checkpoint(rnet,agent,args.load)
+    #start_epoch = checkpoint['epoch'] + 1
     print ('loaded agent from', args.load)
-
 
 if args.parallel:
     agent = nn.DataParallel(agent)
     rnet = nn.DataParallel(rnet)
 
-rnet.cuda()
+rnet.eval().cuda()
 agent.cuda()
 
-optimizer = optim.Adam(list(agent.parameters())+list(rnet.parameters()), lr=args.lr, weight_decay=args.wd)
+optimizer = optim.Adam(agent.parameters(), lr=args.lr, weight_decay=args.wd)
 
 configure(args.cv_dir+'/log', flush_secs=5)
 lr_scheduler = utils.LrScheduler(optimizer, args.lr, args.lr_decay_ratio, args.epoch_step)
 for epoch in range(start_epoch, start_epoch+args.max_epochs+1):
+    test(epoch)
     lr_scheduler.adjust_learning_rate(epoch)
 
+    if args.cl_step < num_gates:
+        args.cl_step = 1 + 1 * (epoch // 1)
+    else:
+        args.cl_step = num_gates
+
+    print ('training the last %d gates ...' % args.cl_step)
     train(epoch)
-    if epoch%10==0:
+
+    if epoch % 10 == 0:
         test(epoch)
