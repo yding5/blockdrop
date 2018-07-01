@@ -23,6 +23,7 @@ parser.add_argument('--beta', type=float, default=1e-1, help='entropy multiplier
 parser.add_argument('--wd', type=float, default=0.0, help='weight decay')
 parser.add_argument('--model', default='R110_C10', help='R<depth>_<dataset> see utils.py for a list of configurations')
 parser.add_argument('--posi', default='0', help='binary code indicates active nodes')
+parser.add_argument('--on', default=None, help='binary code indicates always-on nodes')
 parser.add_argument('--data_dir', default='data/', help='data directory')
 parser.add_argument('--load', default=None, help='checkpoint to load agent from')
 parser.add_argument('--cv_dir', default='cv/tmp/', help='checkpoint directory (models and logs are saved here)')
@@ -111,6 +112,10 @@ def train(epoch):
         #if policy_map[0,-1] == -1:
             #print('full policy map slices')
             #print(full_policy_map_slices[-1][0])
+        always_on_variable = Variable(torch.ones(inputs.size()[0],1)).cuda()
+        for i in on_list:
+            full_policy_slices.insert(i,always_on_variable)
+            full_policy_map_slices.insert(i,always_on_variable)
         full_policy = torch.cat(full_policy_slices, dim=1)
         full_policy_map = torch.cat(full_policy_map_slices, dim=1)
         #print('full policy')
@@ -190,6 +195,9 @@ def test(epoch):
         full_policy_slices = []
         for i in range(num_gates):
             full_policy_slices.append( policy_slices[i].repeat(1,repeat_list[i]))
+        always_on_variable = Variable(torch.ones(inputs.size()[0],1)).cuda()
+        for i in on_list:
+            full_policy_slices.insert(i,always_on_variable)
         full_policy = torch.cat(full_policy_slices, dim=1)
         
         preds = rnet.forward(inputs, full_policy)
@@ -228,6 +236,8 @@ trainloader = torchdata.DataLoader(trainset, batch_size=args.batch_size, shuffle
 testloader = torchdata.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
 posi_list = [int(item) for item in args.posi]
+on_string_list = args.on.split(',')
+on_list = [int(item) for item in on_string_list]
 print(sum(posi_list))
 rnet, agent = utils.get_model(args.model, sum(posi_list))
 num_blocks = sum(rnet.layer_config)
@@ -242,7 +252,7 @@ for item in posi_list:
         temp = 1
 print(repeat_list)
 
-if len(posi_list) != num_blocks:
+if len(posi_list)+len(on_list) != num_blocks:
 	print('error length of posi, should be: '+ str(num_blocks))
 	raise ValueError
 
