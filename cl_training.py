@@ -1,5 +1,5 @@
 import os
-from tensorboard_logger import configure, log_value
+#from tensorboard_logger import configure, log_value
 import torch
 import torch.autograd as autograd
 from torch.autograd import Variable
@@ -126,11 +126,11 @@ def train(epoch):
     log_str = 'E: %d | A: %.3f | R: %.2E | S: %.3f | V: %.3f | #: %d'%(epoch, accuracy, reward, sparsity, variance, len(policy_set))
     print (log_str)
 
-    log_value('train_accuracy', accuracy, epoch)
-    log_value('train_reward', reward, epoch)
-    log_value('train_sparsity', sparsity, epoch)
-    log_value('train_variance', variance, epoch)
-    log_value('train_unique_policies', len(policy_set), epoch)
+    #log_value('train_accuracy', accuracy, epoch)
+    #log_value('train_reward', reward, epoch)
+    #log_value('train_sparsity', sparsity, epoch)
+    #log_value('train_variance', variance, epoch)
+    #log_value('train_unique_policies', len(policy_set), epoch)
 
 
 def test(epoch):
@@ -166,11 +166,11 @@ def test(epoch):
     log_str = 'TS - A: %.3f | R: %.2E | S: %.3f | V: %.3f | #: %d'%(accuracy, reward, sparsity, variance, len(policy_set))
     print (log_str)
 
-    log_value('test_accuracy', accuracy, epoch)
-    log_value('test_reward', reward, epoch)
-    log_value('test_sparsity', sparsity, epoch)
-    log_value('test_variance', variance, epoch)
-    log_value('test_unique_policies', len(policy_set), epoch)
+    #log_value('test_accuracy', accuracy, epoch)
+    #log_value('test_reward', reward, epoch)
+    #log_value('test_sparsity', sparsity, epoch)
+    #log_value('test_variance', variance, epoch)
+    #log_value('test_unique_policies', len(policy_set), epoch)
 
     # save the model
     agent_state_dict = agent.module.state_dict() if args.parallel else agent.state_dict()
@@ -207,7 +207,7 @@ agent.cuda()
 
 optimizer = optim.Adam(agent.parameters(), lr=args.lr, weight_decay=args.wd)
 
-configure(args.cv_dir+'/log', flush_secs=5)
+#configure(args.cv_dir+'/log', flush_secs=5)
 lr_scheduler = utils.LrScheduler(optimizer, args.lr, args.lr_decay_ratio, args.epoch_step)
 for epoch in range(start_epoch, start_epoch+args.max_epochs+1):
     lr_scheduler.adjust_learning_rate(epoch)
