@@ -236,8 +236,13 @@ trainloader = torchdata.DataLoader(trainset, batch_size=args.batch_size, shuffle
 testloader = torchdata.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
 posi_list = [int(item) for item in args.posi]
-on_string_list = args.on.split(',')
-on_list = [int(item) for item in on_string_list]
+if args.on != None:
+    on_string_list = args.on.split(',')
+    on_list = [int(item) for item in on_string_list]
+else:
+    on_list = []
+
+
 print(sum(posi_list))
 rnet, agent = utils.get_model(args.model, sum(posi_list))
 num_blocks = sum(rnet.layer_config)

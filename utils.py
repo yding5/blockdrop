@@ -202,7 +202,7 @@ def get_model(model, num_gates):
         agent = resnet.Policy32([1,1,1], num_blocks=num_gates)
 
     elif model=='R101_ImgNet':
-        rnet_checkpoint = 'cv/pretrained/R101_ImgNet/ImageNet_R101_224_76.464'
+        rnet_checkpoint = 'cv/pretrained/R101_ImgNet/ImageNet_R101_224_76.464.t7'
         layer_config = [3,4,23,3]
         rnet = resnet.FlatResNet224(base.Bottleneck, layer_config, num_classes=1000)
         #agent = resnet.Policy224([1,1,1,1], num_blocks=33)
