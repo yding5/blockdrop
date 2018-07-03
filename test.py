@@ -14,6 +14,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model', default='R110_C10')
 parser.add_argument('--data_dir', default='data/')
 parser.add_argument('--load', default=None)
+parser.add_argument('--posi', default='0', help='binary code indicates active nodes')
+parser.add_argument('--on', default=None, help='binary code indicates always-on nodes')
+
 args = parser.parse_args()
 
 #---------------------------------------------------------------------------------------------#
@@ -71,16 +74,29 @@ def test():
         policy[policy<0.5] = 0.0
         policy[policy>=0.5] = 1.0
 
-        preds = rnet.forward_single(inputs, policy.data.squeeze(0))
+        policy_slices = torch.split(policy, 1, dim = 1)
+        full_policy_slices = []
+        for i in range(num_gates):
+            full_policy_slices.append( policy_slices[i].repeat(1,repeat_list[i]))
+        always_on_variable = Variable(torch.ones(inputs.size()[0],1)).cuda()
+        for i in on_list:
+            full_policy_slices.insert(i,always_on_variable)
+        full_policy = torch.cat(full_policy_slices, dim=1)
+
+        preds = rnet.forward_single(inputs, full_policy.data.squeeze(0))
         _ , pred_idx = preds.max(1)
         match = (pred_idx==targets).data.float()
 
         matches.append(match)
-        policies.append(policy.data)
+        policies.append(full_policy.data)
 
         ops = count_flops(agent) + count_flops(rnet)
         total_ops.append(ops)
 
+    print(policies[0].size())
+    count_policies = torch.cat(policies,dim=0)
+    count_policies = torch.sum(count_policies,0)
+    print(count_policies)
     accuracy, _, sparsity, variance, policy_set = utils.performance_stats(policies, matches, matches)
     ops_mean, ops_std = np.mean(total_ops), np.std(total_ops)
 
@@ -96,7 +112,36 @@ def test():
 #--------------------------------------------------------------------------------------------------------#
 trainset, testset = utils.get_dataset(args.model, args.data_dir)
 testloader = torchdata.DataLoader(testset, batch_size=1, shuffle=False, num_workers=4)
-rnet, agent = utils.get_model(args.model)
+
+
+posi_list = [int(item) for item in args.posi]
+if args.on != None:
+    on_string_list = args.on.split(',')
+    on_list = [int(item) for item in on_string_list]
+else:
+    on_list = []
+print(sum(posi_list))
+
+
+rnet, agent = utils.get_model(args.model,sum(posi_list))
+
+rnet, agent = utils.get_model(args.model, sum(posi_list))
+num_blocks = sum(rnet.layer_config)
+num_gates = sum(posi_list)
+repeat_list = []
+temp = 1
+for item in posi_list:
+    if item == 0:
+        temp = temp + 1
+    else:
+        repeat_list.append(temp)
+        temp = 1
+print(repeat_list)
+
+if len(posi_list)+len(on_list) != num_blocks:
+        print('error length of posi, should be: '+ str(num_blocks))
+        raise ValueError
+
 
 # if no model is loaded, use all blocks
 agent.logit.weight.data.fill_(0)
